@@ -1129,7 +1129,9 @@ ggsave(filename = "output/plots/defcap_rfb_mult_groups_diff_median.png", type = 
 ### ------------------------------------------------------------------------ ###
 ### r(f)b-rule with +20 -30% cap when above Itrigger - multipliers ####
 ### ------------------------------------------------------------------------ ###
+### basis for WKLIFE X decision on multipliers
 
+### load results
 res_cap <- foreach(stock = stocks$stock[1:29], .combine = bind_rows) %:%
   foreach(fhist = c("one-way", "random"), .combine = bind_rows) %:%
   foreach(rule = c("rfb", "rb"), .combine = bind_rows) %do% {
@@ -1203,7 +1205,7 @@ res_plot <- res_cap %>%
                                        "risk_Blim", "ICV", "fitness"), 
                        labels = c("SSB/B[MSY]", "F/F[MSY]", "Catch/MSY", 
                                   "B[lim]~risk", "ICV", "fitness~value")))
-### plot full period rfb-rule
+### plot full period rb-rule
 res_plot %>% 
   filter(stat_yrs == "all" & rule == "rb") %>%
   ggplot(aes(x = multiplier, y = value,
@@ -1231,8 +1233,7 @@ ggsave(filename = "output/plots/cap_2030_b/all_stocks_stats_rb.png", type = "cai
        width = 40, height = 10, units = "cm", dpi = 600)
 
 
-
-### medians
+### medians of stock groups
 res_plot <- res_cap %>%
   filter(stat_yrs == "all" & rule == "rb") %>%
   mutate(ICV = ifelse(multiplier == 0 & ICV == 1, NA, ICV)) %>%
@@ -1336,7 +1337,7 @@ ggsave(filename = "output/plots/cap_2030_b/all_stocks_stats_rfb.png", type = "ca
 
 ### medians
 res_plot <- res_cap %>%
-  filter(stat_yrs == "all" & rule == "rb") %>%
+  filter(stat_yrs == "all" & rule == "rfb") %>%
   mutate(ICV = ifelse(multiplier == 0 & ICV == 1, NA, ICV)) %>%
   # filter(stock %in% c("ang3", "rjc2", "smn", "wlf", "meg", "lin", "rjc", "syc",
   #                     "sdv", "ang", "ang2", "pol", "had", "nep", "mut", "sbb",
@@ -1391,9 +1392,9 @@ res_plot %>%
   labs(x = "multiplier", y = "") +
   ylim(c(0, NA)) +
   scale_x_continuous(breaks = c(0, 0.5, 1, 1.5, 2))
-ggsave(filename = "output/plots/cap_2030_b/multiplier_rfb.pdf",
+ggsave(filename = "output/plots/cap_2030_b/multiplier_rfb_fixed.pdf",
        width = 17, height = 10, units = "cm")
-ggsave(filename = "output/plots/cap_2030_b/multiplier_rfb.png", 
+ggsave(filename = "output/plots/cap_2030_b/multiplier_rfb_fixed.png", 
        type = "cairo", width = 17, height = 10, units = "cm", dpi = 600)
 ### zoom
 res_plot %>% 
@@ -1421,7 +1422,79 @@ res_plot %>%
   labs(x = "multiplier", y = "") +
   ylim(c(0, NA))# +
   #scale_x_continuous(breaks = c(0, 0.5, 1, 1.5, 2))
-ggsave(filename = "output/plots/cap_2030_b/multiplier_rfb_zoom.pdf",
+ggsave(filename = "output/plots/cap_2030_b/multiplier_rfb_zoom_fixed.pdf",
        width = 17, height = 10, units = "cm")
-ggsave(filename = "output/plots/cap_2030_b/multiplier_rfb_zoom.png", 
+ggsave(filename = "output/plots/cap_2030_b/multiplier_rfb_zoom_fixed.png", 
        type = "cairo", width = 17, height = 10, units = "cm", dpi = 600)
+
+
+### plot multiplier vs. k
+m_vs_k <- res_cap %>%
+  filter(stat_yrs == "all" & rule == "rfb") %>%
+  group_by(fhist, stock) %>%
+  filter(risk_Blim <= 0.05) %>%
+  filter(multiplier == max(multiplier)) %>%
+  filter(stock %in% stocks$stock[1:20])
+p_m_vs_k <- m_vs_k %>%
+  ggplot(aes(x = k, y = multiplier)) +
+  geom_line(aes(group = stock), colour = "grey", size = 0.3) +
+  geom_point(aes(colour = fhist), size = 0.4) +
+  scale_color_brewer("fishing\nhistory", palette = "Set1") +
+  labs(x = expression(italic(k)~"[year"^{-1}*"]"), 
+       y = expression("multiplier ("*italic(m)*")")) +
+  ylim(c(0, NA)) + xlim(c(0, NA)) +
+  theme_bw(base_size = 8) +
+  theme(legend.key.height = unit(0.6, "lines"),
+        legend.key.width = unit(0.5, "lines"))
+p_m_vs_k
+ggsave(filename = "output/plots/cap_2030_b/multiplier_rfb_k.pdf",
+       width = 10, height = 6, units = "cm")
+ggsave(filename = "output/plots/cap_2030_b/multiplier_rfb_k.png", 
+       type = "cairo", width = 10, height = 6, units = "cm", dpi = 600)
+### add smoother
+p_m_vs_k + geom_smooth(size = 0.3)
+ggsave(filename = "output/plots/cap_2030_b/multiplier_rfb_k_smoother.png", 
+       type = "cairo", width = 10, height = 6, units = "cm", dpi = 600)
+### add linear regression
+p_m_vs_k + geom_smooth(method = "lm", size = 0.3)
+ggsave(filename = "output/plots/cap_2030_b/multiplier_rfb_k_lm.png", 
+       type = "cairo", width = 10, height = 6, units = "cm", dpi = 600)
+### add robust linear regression
+library(MASS)
+p_m_vs_k + geom_smooth(method = "rlm", size = 0.3)
+ggsave(filename = "output/plots/cap_2030_b/multiplier_rfb_k_rlm.png", 
+       type = "cairo", width = 10, height = 6, units = "cm", dpi = 600)
+# lm(data = m_vs_k[, c("k", "multiplier")], formula = multiplier ~ k)
+# m_rlm <- rlm(formula = m_vs_k$multiplier ~ m_vs_k$k)
+# Call:
+#   rlm(formula = m_vs_k$multiplier ~ m_vs_k$k)
+# Converged in 7 iterations
+# 
+# Coefficients:
+#   (Intercept)    m_vs_k$k 
+# 1.0473833  -0.6469253 
+# 
+# Degrees of freedom: 40 total; 38 residual
+# Scale estimate: 0.0755
+
+### steps
+p_m_vs_k +
+  geom_line(data = data.frame(k = c(0.08, 0.195), multiplier = c(0.95, 0.95)),
+            colour = "black") +
+  geom_line(data = data.frame(k = c(0.2, 0.32), multiplier = c(0.9, 0.9)),
+            colour = "black")
+ggsave(filename = "output/plots/cap_2030_b/multiplier_rfb_k_step.png", 
+       type = "cairo", width = 10, height = 6, units = "cm", dpi = 600)
+
+### step + robust regression
+p_m_vs_k +
+  geom_smooth(method = "rlm", size = 0.3, se = FALSE) +
+  geom_line(data = data.frame(k = c(0.08, 0.195), multiplier = c(0.95, 0.95)),
+            colour = "black") +
+  geom_line(data = data.frame(k = c(0.2, 0.32), multiplier = c(0.9, 0.9)),
+            colour = "black")
+ggsave(filename = "output/plots/cap_2030_b/multiplier_rfb_k_step_rlm.png", 
+       type = "cairo", width = 10, height = 6, units = "cm", dpi = 600)
+ggsave(filename = "output/plots/cap_2030_b/multiplier_rfb_k_step_rlm.pdf",
+       width = 10, height = 6, units = "cm")
+
