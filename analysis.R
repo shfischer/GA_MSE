@@ -850,3 +850,578 @@ ggsave(filename = "output/plots/PA/all_GA_params_MSYPA.png",
        width = 17, height = 13, units = "cm", dpi = 600, type = "cairo")
 ggsave(filename = "output/plots/PA/all_GA_params_MSYPA.pdf",
       width = 17, height = 13, units = "cm", dpi = 600)
+
+
+
+
+
+### ------------------------------------------------------------------------ ###
+### rfb-rule & rb-rule with +20 -30% uncertainty cap - multipliers ####
+### ------------------------------------------------------------------------ ###
+
+res_cap <- foreach(stock = stocks$stock[1:29], .combine = bind_rows) %:%
+  foreach(fhist = c("one-way", "random"), .combine = bind_rows) %:%
+  #foreach(obj = c("MSYPA"), .combine = bind_rows) %:%
+  #foreach(params = c("default", "multiplier"), .combine = bind_rows) %:%
+  foreach(rule = c("rfb", "rb"), .combine = bind_rows) %do% {#browser()
+  #foreach(stat_yrs = c("all"), .combine = bind_rows) %do% {
+    #browser()
+    ### load data
+    par_file <- "multiplier-upper_constraint1.2-lower_constraint0.7"
+    obj_file <- "obj_ICES_MSYPA"
+    scenario <- switch(rule, 
+                       "rfb" = "cap_20_30",
+                       "rb" = "cap_20_30_rb")
+    path <- paste0("output/500_50/", scenario, "/", fhist, "/", stock, "/",
+                   par_file, "--", obj_file)
+    path_runs <- paste0(path, "_runs_last10.rds")
+    path_res <- paste0(path, "_res_last10.rds")
+    if (!file.exists(path_runs)) return(NULL)
+    print("found something")
+    #ga_res <- readRDS(path_res)
+    ga_runs <- readRDS(path_runs)
+    
+    stats <- lapply(ga_runs, function(x) {
+      tmp <- cbind(as.data.frame(t(x$pars)),
+                   as.data.frame(lapply(as.data.frame(t(x$stats)), unlist)))
+      tmp <- rbind(tmp, tmp)
+      tmp$stat_yrs <- c("all", "last10")
+      stats_names <- c("risk_Blim", "risk_Bmsy", "risk_halfBmsy", 
+                       "risk_collapse", "SSB", "Fbar", "Catch", "SSB_rel", 
+                       "Fbar_rel", "Catch_rel", "ICV")
+      tmp[2, stats_names] <- tmp[2, paste0(stats_names, "_last10")]
+      tmp[, paste0(stats_names, "_last10")] <- NULL
+      return(tmp)
+    })
+    stats <- do.call(rbind, stats)
+    stats$stock <- stock
+    stats$fhist <- fhist
+    stats$rule <- rule
+    return(stats)
+}
+
+res_cap <- res_cap %>%
+  left_join(stocks[, c("stock", "k")]) %>%
+  mutate(stock_k = paste0(stock, "~(italic(k)==", k, ")")) %>%
+  mutate(stock_k = factor(stock_k, levels = unique(stock_k))) %>%
+  mutate(stock = factor(stock, levels = stocks$stock))
+  
+
+
+saveRDS(res_cap, file = "output/500_50/rfb-rb-cap2030.rds")
+res_cap <- readRDS("output/500_50/rfb-rb-cap2030.rds")
+
+
+### plot
+res_cap <- res_cap %>%
+  #filter(stat_yrs == "all") %>%
+  select(multiplier, risk_Blim, SSB_rel, Fbar_rel, Catch_rel, ICV,
+         stat_yrs, stock, fhist, rule, stock_k) %>%
+  pivot_longer(c(SSB_rel, Fbar_rel, Catch_rel, risk_Blim, ICV), 
+               names_to = "key", values_to = "value") %>%
+  mutate(stat = factor(key, levels = c("SSB_rel", "Fbar_rel", "Catch_rel",
+                                       "risk_Blim", "ICV", "fitness"), 
+                       labels = c("SSB/B[MSY]", "F/F[MSY]", "Catch/MSY", 
+                                  "B[lim]~risk", "ICV", "fitness~value")))
+stats_targets <- data.frame(stat = c("SSB/B[MSY]", "F/F[MSY]", "Catch/MSY", 
+                                     "B[lim]~risk", "ICV"),
+                            target = c(1, 1, 1, 0, 0))
+### plot full period rfb-rule
+p <- res_cap %>% 
+  filter(stat_yrs == "all" & rule == "rfb") %>%
+  ggplot(aes(x = multiplier, y = value,
+             colour = as.factor(fhist), linetype = as.factor(fhist))) +
+  geom_line(size = 0.3) +
+  geom_hline(data = data.frame(stat = "B[lim]~risk", y = 0.05),
+             aes(yintercept = y), colour = "red") +
+  facet_grid(stat ~ stock_k, labeller = "label_parsed", switch = "y",
+             scales = "free_y") +
+  scale_linetype_discrete("fishing\nhistory") +
+  scale_colour_discrete("fishing\nhistory") +
+  theme_bw(base_size = 8) +
+  theme(strip.placement.y = "outside",
+        strip.background.y = element_blank(),
+        strip.text.y = element_text(size = 8),
+        strip.text.x = element_text(size = 6)) +
+  labs(x = "multiplier", y = "") +
+  ylim(c(0, NA)) +
+  scale_x_continuous(breaks = c(0, 1, 2)#,
+                     #expand = expansion(mult = c(0.1, 0.1))
+                     )
+p
+ggsave(filename = "output/plots/defcap_rfb_mult.pdf",
+       width = 40, height = 10, units = "cm")
+ggsave(filename = "output/plots/defcap_rfb_mult.png", type = "cairo",
+       width = 40, height = 10, units = "cm", dpi = 600)
+
+
+res_cap <- readRDS("output/500_50/rfb-rb-cap2030.rds")
+res_sub <- res_cap %>% 
+  filter(stat_yrs == "all" & rule == "rfb" & fhist == "one-way") %>%
+  filter(k <= 0.19) %>%
+  group_by(multiplier) %>%
+  summarise(risk = median(risk_Blim))
+res_sub %>% 
+  ggplot(aes(x = multiplier, y = risk)) +
+  geom_line() +
+  geom_hline(yintercept = 0.05) +
+  ylim(0, NA)
+
+
+
+res_sub <- res_cap %>% 
+  filter(stat_yrs == "all" & rule == "rfb" & fhist == "one-way") %>%
+  filter(k > 0.19 & k <= 0.32) %>%
+  group_by(multiplier) %>%
+  summarise(risk = median(risk_Blim))
+res_sub %>% 
+  ggplot(aes(x = multiplier, y = risk)) +
+  geom_line() +
+  geom_hline(yintercept = 0.05) +
+  ylim(0, NA)
+
+
+
+res_sub <- res_cap %>% 
+  filter(stat_yrs == "all" & rule == "rfb" & fhist %in% c("random","one-way")) %>%
+  filter(k <= 0.32) %>%
+  # mutate(group = ifelse(k > 0.19, "medium-italic(k)", "low-italic(k)")) %>%
+  mutate(group = ifelse(TRUE, "medium-italic(k)", "low-italic(k)")) %>%
+  group_by(multiplier, group) %>%
+  summarise(risk = median(risk_Blim))
+res_sub %>% 
+  ggplot(aes(x = multiplier, y = risk)) +
+  geom_line() +
+  geom_hline(yintercept = 0.05, colour = "red") +
+  ylim(0, NA) +
+  facet_wrap(~ group, labeller = "label_parsed") +
+  labs(x = "multiplier", y = expression(B[lim]~risk)) +
+  theme_bw(base_size = 8)
+ggsave(filename = "output/plots/defcap_rfb_mult_groups.png", type = "cairo",
+       width = 17, height = 8, units = "cm", dpi = 600)
+
+
+
+
+NumDiffTable <- function(par, val, method = "central") {
+  ### forward difference approximation
+  if (identical(method, "forward")) {
+    diff <- sapply(seq_along(par)[1:(length(par) - 1)], function(x) {
+      (val[x + 1] - val[x])/(par[x + 1] - par[x])
+    })
+    diff <- c(diff, NA)
+  ### backward difference approximation
+  } else if (identical(method, "backward")) {
+    diff <- sapply(seq_along(par)[2:(length(par))], function(x) {
+      (val[x] - val[x - 1])/(par[x] - par[x - 1])
+    })
+    diff <- c(NA, diff)
+  ### use central difference approximation
+  } else if (identical(method, "central")) {
+    diff <- sapply(seq_along(par)[2:(length(par) - 1)], function(x) {
+      (val[x + 1] - val[x - 1])/(par[x + 1] - par[x - 1])
+    })
+    ### first/last values
+    diff0 <- (val[2] - val[1])/(par[2] - par[1])
+    diff1 <- (val[length(val)] - val[length(val) - 1]) /
+      (par[length(val)] - par[length(val) - 1])
+    diff <- c(diff0, diff, diff1)
+  }
+  return(diff)
+}
+
+res_sub <- res_cap %>% 
+  filter(stat_yrs == "all" & rule == "rfb" & fhist %in% c("random","one-way")) %>%
+  filter(k <= 0.32) %>%
+  mutate(group = ifelse(k > 0.19, "medium-italic(k)", "low-italic(k)")) %>%
+  #mutate(group = ifelse(TRUE, "medium-italic(k)", "low-italic(k)")) %>%
+  group_by(multiplier, group) %>%
+  summarise(risk = median(risk_Blim)) %>%
+  ungroup() %>%
+  group_by(group) %>%
+  mutate(risk_diff = NumDiffTable(par = multiplier, val = risk,
+                                       method = "central")) %>%
+  pivot_longer(c(risk, risk_diff)) %>%
+  mutate(name = factor(name, levels = c("risk", "risk_diff"),
+                       labels = c("B[lim]~risk",
+                                  "B[lim]~risk~bold('\\'')")))
+p <- res_sub %>%
+  ggplot(aes(x = multiplier, y = value)) +
+  geom_smooth(method = "loess", span = 0.2, n = 10000, colour = "grey",
+              level = 0, size = 0.5) +
+  geom_point(size = 0.5, stroke = 0) +
+  facet_grid(name ~ group, scales = "free", labeller = label_parsed) +
+  geom_hline(yintercept = 0.05, colour = "red", size = 0.4) +
+  # geom_vline(xintercept = 0.705, 
+  #            colour = "black", linetype = "dashed", size = 0.4) +
+  theme_bw(base_size = 8) +
+  labs(x = "catch rule multiplier", y = "") #+
+p
+
+
+res_sub <- res_cap %>% 
+  filter(stat_yrs == "all" & rule == "rfb" & fhist %in% c("random","one-way")) %>%
+  filter(k <= 0.32) %>%
+  mutate(group = ifelse(k > 0.19, "medium-italic(k)", "low-italic(k)")) %>%
+  #mutate(group = ifelse(TRUE, "medium-italic(k)", "low-italic(k)")) %>%
+  group_by(group, stock, fhist) %>%
+  #summarise(risk = median(risk_Blim)) %>%
+  # ungroup() %>%
+  # group_by(group) %>%
+  mutate(risk_diff = NumDiffTable(par = multiplier, val = risk_Blim,
+                                       method = "central")) %>%
+  pivot_longer(c(risk_Blim, risk_diff)) %>%
+  mutate(name = factor(name, levels = c("risk", "risk_Blim"),
+                       labels = c("B[lim]~risk",
+                                  "B[lim]~risk~bold('\\'')")))
+p <- res_sub %>%
+  ggplot(aes(x = multiplier, y = value, group = interaction(stock, fhist))) +
+  geom_smooth(method = "loess", span = 0.2, n = 10000, colour = "grey",
+              level = 0, size = 0.5) +
+  geom_point(size = 0.5, stroke = 0) +
+  facet_grid(name ~ group, scales = "free", labeller = label_parsed) +
+  geom_hline(yintercept = 0.05, colour = "red", size = 0.4) +
+  # geom_vline(xintercept = 0.705, 
+  #            colour = "black", linetype = "dashed", size = 0.4) +
+  theme_bw(base_size = 8) +
+  labs(x = "catch rule multiplier", y = "") #+
+p
+ggsave(filename = "output/plots/defcap_rfb_mult_groups_diff.png", type = "cairo",
+       width = 17, height = 12, units = "cm", dpi = 600)
+
+res_sub <- res_cap %>% 
+  filter(stat_yrs == "all" & rule == "rfb" & fhist %in% c("random","one-way")) %>%
+  filter(k <= 0.32) %>%
+  mutate(group = ifelse(k > 0.19, "medium-italic(k)", "low-italic(k)")) %>%
+  #mutate(group = ifelse(TRUE, "medium-italic(k)", "low-italic(k)")) %>%
+  group_by(group, stock, fhist) %>%
+  #summarise(risk = median(risk_Blim)) %>%
+  # ungroup() %>%
+  # group_by(group) %>%
+  mutate(risk_diff = NumDiffTable(par = multiplier, val = risk_Blim,
+                                       method = "central")) %>%
+  ungroup() %>%
+  group_by(group, multiplier) %>%
+  summarise(risk_Blim = median(risk_Blim),
+            risk_Blim_diff = median(risk_diff)) %>%
+  pivot_longer(c(risk_Blim, risk_Blim_diff)) %>%
+  mutate(name = factor(name, levels = c("risk_Blim", "risk_Blim_diff"),
+                       labels = c("B[lim]~risk",
+                                  "B[lim]~risk~bold('\\'')")))
+p <- res_sub %>%
+  ggplot(aes(x = multiplier, y = value, group = interaction(stock, fhist))) +
+  geom_smooth(method = "loess", span = 0.2, n = 10000, colour = "grey",
+              level = 0, size = 0.5) +
+  geom_point(size = 0.5, stroke = 0) +
+  facet_grid(name ~ group, scales = "free", labeller = label_parsed) +
+  geom_hline(yintercept = 0.05, colour = "red", size = 0.4) +
+  # geom_vline(xintercept = 0.705, 
+  #            colour = "black", linetype = "dashed", size = 0.4) +
+  theme_bw(base_size = 8) +
+  labs(x = "catch rule multiplier", y = "") #+
+p
+ggsave(filename = "output/plots/defcap_rfb_mult_groups_diff_median.png", type = "cairo",
+       width = 17, height = 12, units = "cm", dpi = 600)
+
+
+
+
+### ------------------------------------------------------------------------ ###
+### r(f)b-rule with +20 -30% cap when above Itrigger - multipliers ####
+### ------------------------------------------------------------------------ ###
+
+res_cap <- foreach(stock = stocks$stock[1:29], .combine = bind_rows) %:%
+  foreach(fhist = c("one-way", "random"), .combine = bind_rows) %:%
+  foreach(rule = c("rfb", "rb"), .combine = bind_rows) %do% {
+    #browser()
+    ### load data
+    par_file <- "multiplier-upper_constraint1.2-lower_constraint0.7"
+    obj_file <- "obj_ICES_MSYPA"
+    scenario <- switch(rule, 
+                       "rfb" = "cap_20_30_rfb_b",
+                       "rb" = "cap_20_30_rb_b")
+    path <- paste0("output/500_100/", scenario, "/", fhist, "/", stock, "/",
+                   par_file, "--", obj_file)
+    path_runs <- paste0(path, "_runs.rds")
+    if (!file.exists(path_runs)) return(NULL)
+    print("found something")
+    ga_runs <- readRDS(path_runs)
+    
+    stats <- lapply(ga_runs, function(x) {
+      tmp <- cbind(as.data.frame(t(x$pars)),
+                   as.data.frame(lapply(as.data.frame(t(x$stats)), unlist)))
+      return(tmp)
+    })
+    stats <- do.call(rbind, stats)
+    stats$stock <- stock
+    stats$fhist <- fhist
+    stats$rule <- rule
+    rownames(stats) <- NULL
+    return(stats)
+}
+### split reporting periods
+smry_stats <- c("risk_Blim", "risk_Bmsy", "risk_halfBmsy", "risk_collapse", 
+                "SSB", "Fbar", "Catch", "SSB_rel", "Fbar_rel", "Catch_rel", "ICV")
+periods <- c("first10", "41to50", "last10", "firsthalf", "lastfhalf", "11to50")
+res_cap <- lapply(split(res_cap, seq(nrow(res_cap))), function(x) {
+  stats_more <- t(sapply(periods, function(y) {
+    as.numeric(x[grep(x = names(x), pattern = y)])
+  }))
+  stats <- rbind(all = as.numeric(x[smry_stats]), stats_more)
+  stats <- as.data.frame(stats)
+  colnames(stats) <- smry_stats
+  stats$stat_yrs <- rownames(stats)
+  rownames(stats) <- NULL
+  ### add scenario definition
+  stats <- cbind(x[c("lag_idx", "range_idx_1", "range_idx_2", "range_catch",
+                     "exp_r", "exp_f", "exp_b", "interval", "multiplier",
+                     "upper_constraint", "lower_constraint",
+                     "stock", "fhist", "rule")],
+                 stats)
+  return(stats)
+})
+res_cap <- do.call(rbind, res_cap)
+### add k
+res_cap <- res_cap %>%
+  left_join(stocks[, c("stock", "k")]) %>%
+  mutate(stock_k = paste0(stock, "~(italic(k)==", k, ")")) %>%
+  mutate(stock_k = factor(stock_k, levels = unique(stock_k))) %>%
+  mutate(stock = factor(stock, levels = stocks$stock))
+  
+saveRDS(res_cap, file = "output/500_100/rfb-rb-cap2030_b.rds")
+res_cap <- readRDS("output/500_100/rfb-rb-cap2030_b.rds")
+
+
+### rb-rule ####
+### plot
+res_plot <- res_cap %>%
+  select(multiplier, risk_Blim, SSB_rel, Fbar_rel, Catch_rel, ICV,
+         stat_yrs, stock, fhist, rule, stock_k) %>%
+  pivot_longer(c(SSB_rel, Fbar_rel, Catch_rel, risk_Blim, ICV), 
+               names_to = "key", values_to = "value") %>%
+  mutate(stat = factor(key, levels = c("SSB_rel", "Fbar_rel", "Catch_rel",
+                                       "risk_Blim", "ICV", "fitness"), 
+                       labels = c("SSB/B[MSY]", "F/F[MSY]", "Catch/MSY", 
+                                  "B[lim]~risk", "ICV", "fitness~value")))
+### plot full period rfb-rule
+res_plot %>% 
+  filter(stat_yrs == "all" & rule == "rb") %>%
+  ggplot(aes(x = multiplier, y = value,
+             colour = as.factor(fhist), linetype = as.factor(fhist))) +
+  geom_line(size = 0.3) +
+  geom_hline(data = data.frame(stat = "B[lim]~risk", y = 0.05),
+             aes(yintercept = y), colour = "red") +
+  facet_grid(stat ~ stock_k, labeller = "label_parsed", switch = "y",
+             scales = "free_y") +
+  scale_linetype_discrete("fishing\nhistory") +
+  scale_colour_discrete("fishing\nhistory") +
+  theme_bw(base_size = 8) +
+  theme(strip.placement.y = "outside",
+        strip.background.y = element_blank(),
+        strip.text.y = element_text(size = 8),
+        strip.text.x = element_text(size = 6)) +
+  labs(x = "multiplier", y = "") +
+  ylim(c(0, NA)) +
+  scale_x_continuous(breaks = c(0, 1, 2)#,
+                     #expand = expansion(mult = c(0.1, 0.1))
+                     )
+ggsave(filename = "output/plots/cap_2030_b/all_stocks_stats_rb.pdf",
+       width = 40, height = 10, units = "cm")
+ggsave(filename = "output/plots/cap_2030_b/all_stocks_stats_rb.png", type = "cairo",
+       width = 40, height = 10, units = "cm", dpi = 600)
+
+
+
+### medians
+res_plot <- res_cap %>%
+  filter(stat_yrs == "all" & rule == "rb") %>%
+  mutate(ICV = ifelse(multiplier == 0 & ICV == 1, NA, ICV)) %>%
+  # filter(stock %in% c("ang3", "rjc2", "smn", "wlf", "meg", "lin", "rjc", "syc",
+  #                     "sdv", "ang", "ang2", "pol", "had", "nep", "mut", "sbb",
+  #                     "ple", "syc2", "arg", "tur")) %>%
+  #filter(stock %in% stocks$stock[1:29]) %>%
+  select(multiplier, risk_Blim, SSB_rel, Fbar_rel, Catch_rel, ICV,
+         fhist, stock, stock_k, k)
+res_mult <- res_plot %>% 
+  group_by(multiplier) %>%
+  summarise(risk_Blim = median(risk_Blim),
+            SSB_rel = median(SSB_rel),
+            Fbar_rel = median(Fbar_rel),
+            Catch_rel = median(Catch_rel),
+            ICV = median(ICV)) %>%
+  mutate(stock = "median")
+res_mult %>%
+  filter(risk_Blim >= 0.04 & risk_Blim <= 0.07) %>% print(n = Inf)
+res_plot <- res_plot %>%
+  full_join(res_mult)
+res_plot <- res_plot %>%
+  pivot_longer(c(SSB_rel, Fbar_rel, Catch_rel, risk_Blim, ICV), 
+               names_to = "key", values_to = "value") %>%
+  mutate(stat = factor(key, levels = c("SSB_rel", "Fbar_rel", "Catch_rel",
+                                       "risk_Blim", "ICV", "fitness"), 
+                       labels = c("SSB/B[MSY]", "F/F[MSY]", "Catch/MSY", 
+                                  "B[lim]~risk", "ICV", "fitness~value"))) %>%
+  mutate(group = ifelse(stock == "median", "median", NA),
+         group = ifelse(stock != "median" & fhist == "one-way", "one-way", group),
+         group = ifelse(stock != "median" & fhist == "random", "random", group))
+
+res_plot %>% 
+  ggplot(aes(x = multiplier, y = value,
+             colour = group, 
+             alpha = group,
+             group = interaction(stock, fhist))) +
+  geom_line(size = 0.3) +
+  geom_hline(data = data.frame(stat = "B[lim]~risk", y = 0.05),
+             aes(yintercept = y), colour = "red") +
+  facet_wrap(~ stat, labeller = "label_parsed", switch = "y",
+             scales = "free_y") +
+  #scale_colour_manual("", values = c("TRUE" = "black", "FALSE" = "blue")) +
+  scale_colour_manual("", values = c("median" = "black", "one-way" = "blue",
+                                     "random" = "green")) +
+  scale_alpha_manual("", values = c("median" = 1, "one-way" = 0.2,
+                                     "random" = 0.2)) +
+  theme_bw(base_size = 8) +
+  theme(strip.placement.y = "outside",
+        strip.background.y = element_blank(),
+        strip.text.y = element_text(size = 8),
+        strip.text.x = element_text(size = 6)) +
+  labs(x = "multiplier", y = "") +
+  ylim(c(0, NA)) +
+  scale_x_continuous(breaks = c(0, 0.5, 1))
+ggsave(filename = "output/plots/cap_2030_b/multiplier_rb.pdf",
+       width = 17, height = 10, units = "cm")
+ggsave(filename = "output/plots/cap_2030_b/multiplier_rb.png", 
+       type = "cairo", width = 17, height = 10, units = "cm", dpi = 600)
+
+
+### rfb-rule ####
+### plot
+res_plot <- res_cap %>%
+  select(multiplier, risk_Blim, SSB_rel, Fbar_rel, Catch_rel, ICV,
+         stat_yrs, stock, fhist, rule, stock_k) %>%
+  pivot_longer(c(SSB_rel, Fbar_rel, Catch_rel, risk_Blim, ICV), 
+               names_to = "key", values_to = "value") %>%
+  mutate(stat = factor(key, levels = c("SSB_rel", "Fbar_rel", "Catch_rel",
+                                       "risk_Blim", "ICV", "fitness"), 
+                       labels = c("SSB/B[MSY]", "F/F[MSY]", "Catch/MSY", 
+                                  "B[lim]~risk", "ICV", "fitness~value")))
+### plot full period rfb-rule
+res_plot %>% 
+  filter(stat_yrs == "all" & rule == "rfb") %>%
+  ggplot(aes(x = multiplier, y = value,
+             colour = as.factor(fhist), linetype = as.factor(fhist))) +
+  geom_line(size = 0.3) +
+  geom_hline(data = data.frame(stat = "B[lim]~risk", y = 0.05),
+             aes(yintercept = y), colour = "red") +
+  facet_grid(stat ~ stock_k, labeller = "label_parsed", switch = "y",
+             scales = "free_y") +
+  scale_linetype_discrete("fishing\nhistory") +
+  scale_colour_discrete("fishing\nhistory") +
+  theme_bw(base_size = 8) +
+  theme(strip.placement.y = "outside",
+        strip.background.y = element_blank(),
+        strip.text.y = element_text(size = 8),
+        strip.text.x = element_text(size = 6)) +
+  labs(x = "multiplier", y = "") +
+  ylim(c(0, NA)) +
+  scale_x_continuous(breaks = c(0, 1, 2)#,
+                     #expand = expansion(mult = c(0.1, 0.1))
+                     )
+ggsave(filename = "output/plots/cap_2030_b/all_stocks_stats_rfb.pdf",
+       width = 40, height = 10, units = "cm")
+ggsave(filename = "output/plots/cap_2030_b/all_stocks_stats_rfb.png", type = "cairo",
+       width = 40, height = 10, units = "cm", dpi = 600)
+
+
+
+### medians
+res_plot <- res_cap %>%
+  filter(stat_yrs == "all" & rule == "rb") %>%
+  mutate(ICV = ifelse(multiplier == 0 & ICV == 1, NA, ICV)) %>%
+  # filter(stock %in% c("ang3", "rjc2", "smn", "wlf", "meg", "lin", "rjc", "syc",
+  #                     "sdv", "ang", "ang2", "pol", "had", "nep", "mut", "sbb",
+  #                     "ple", "syc2", "arg", "tur")) %>%
+  filter(stock %in% stocks$stock[1:20]) %>%
+  select(multiplier, risk_Blim, SSB_rel, Fbar_rel, Catch_rel, ICV,
+         fhist, stock, stock_k, k) %>%
+  mutate(group_k = ifelse(k < 0.2, "low-k", "medium-k"))
+res_mult <- res_plot %>% 
+  group_by(group_k, multiplier) %>%
+  summarise(risk_Blim = median(risk_Blim),
+            SSB_rel = median(SSB_rel),
+            Fbar_rel = median(Fbar_rel),
+            Catch_rel = median(Catch_rel),
+            ICV = median(ICV)) %>%
+  mutate(stock = "median")
+res_mult %>%
+  filter(risk_Blim >= 0.04 & risk_Blim <= 0.07) %>% print(n = Inf)
+res_plot <- res_plot %>%
+  full_join(res_mult)
+res_plot <- res_plot %>%
+  pivot_longer(c(SSB_rel, Fbar_rel, Catch_rel, risk_Blim, ICV), 
+               names_to = "key", values_to = "value") %>%
+  mutate(stat = factor(key, levels = c("SSB_rel", "Fbar_rel", "Catch_rel",
+                                       "risk_Blim", "ICV", "fitness"), 
+                       labels = c("SSB/B[MSY]", "F/F[MSY]", "Catch/MSY", 
+                                  "B[lim]~risk", "ICV", "fitness~value"))) %>%
+  mutate(group = ifelse(stock == "median", "median", NA),
+         group = ifelse(stock != "median" & fhist == "one-way", "one-way", group),
+         group = ifelse(stock != "median" & fhist == "random", "random", group))
+
+res_plot %>% 
+  ggplot(aes(x = multiplier, y = value,
+             colour = group, 
+             alpha = group,
+             group = interaction(stock, fhist))) +
+  geom_line(size = 0.3) +
+  geom_hline(data = data.frame(stat = "B[lim]~risk", y = 0.05),
+             aes(yintercept = y), colour = "red") +
+  facet_grid(stat ~ group_k, labeller = "label_parsed", switch = "y",
+             scales = "free_y") +
+  #scale_colour_manual("", values = c("TRUE" = "black", "FALSE" = "blue")) +
+  scale_colour_manual("", values = c("median" = "black", "one-way" = "blue",
+                                     "random" = "green")) +
+  scale_alpha_manual("", values = c("median" = 1, "one-way" = 0.2,
+                                     "random" = 0.2)) +
+  theme_bw(base_size = 8) +
+  theme(strip.placement.y = "outside",
+        strip.background.y = element_blank(),
+        strip.text.y = element_text(size = 8),
+        strip.text.x = element_text(size = 6)) +
+  labs(x = "multiplier", y = "") +
+  ylim(c(0, NA)) +
+  scale_x_continuous(breaks = c(0, 0.5, 1, 1.5, 2))
+ggsave(filename = "output/plots/cap_2030_b/multiplier_rfb.pdf",
+       width = 17, height = 10, units = "cm")
+ggsave(filename = "output/plots/cap_2030_b/multiplier_rfb.png", 
+       type = "cairo", width = 17, height = 10, units = "cm", dpi = 600)
+### zoom
+res_plot %>% 
+  filter(multiplier >= 0.7 & multiplier <= 1.05) %>%
+  filter(stat == "B[lim]~risk") %>%
+  ggplot(aes(x = multiplier, y = value,
+             colour = group, 
+             alpha = group,
+             group = interaction(stock, fhist))) +
+  geom_line(size = 0.3) +
+  geom_hline(data = data.frame(stat = "B[lim]~risk", y = 0.05),
+             aes(yintercept = y), colour = "red") +
+  facet_grid(stat ~ group_k, labeller = "label_parsed", switch = "y",
+             scales = "free_y") +
+  #scale_colour_manual("", values = c("TRUE" = "black", "FALSE" = "blue")) +
+  scale_colour_manual("", values = c("median" = "black", "one-way" = "blue",
+                                     "random" = "green")) +
+  scale_alpha_manual("", values = c("median" = 1, "one-way" = 0.2,
+                                     "random" = 0.2)) +
+  theme_bw(base_size = 8) +
+  theme(strip.placement.y = "outside",
+        strip.background.y = element_blank(),
+        strip.text.y = element_text(size = 8),
+        strip.text.x = element_text(size = 6)) +
+  labs(x = "multiplier", y = "") +
+  ylim(c(0, NA))# +
+  #scale_x_continuous(breaks = c(0, 0.5, 1, 1.5, 2))
+ggsave(filename = "output/plots/cap_2030_b/multiplier_rfb_zoom.pdf",
+       width = 17, height = 10, units = "cm")
+ggsave(filename = "output/plots/cap_2030_b/multiplier_rfb_zoom.png", 
+       type = "cairo", width = 17, height = 10, units = "cm", dpi = 600)
