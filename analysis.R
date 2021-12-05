@@ -1427,7 +1427,6 @@ ggsave(filename = "output/plots/cap_2030_b/multiplier_rfb_zoom_fixed.pdf",
 ggsave(filename = "output/plots/cap_2030_b/multiplier_rfb_zoom_fixed.png", 
        type = "cairo", width = 17, height = 10, units = "cm", dpi = 600)
 
-
 ### plot multiplier vs. k
 m_vs_k <- res_cap %>%
   filter(stat_yrs == "all" & rule == "rfb") %>%
@@ -1465,7 +1464,7 @@ p_m_vs_k + geom_smooth(method = "rlm", size = 0.3)
 ggsave(filename = "output/plots/cap_2030_b/multiplier_rfb_k_rlm.png", 
        type = "cairo", width = 10, height = 6, units = "cm", dpi = 600)
 # lm(data = m_vs_k[, c("k", "multiplier")], formula = multiplier ~ k)
-# m_rlm <- rlm(formula = m_vs_k$multiplier ~ m_vs_k$k)
+# m_rlm <- MASS::rlm(formula = m_vs_k$multiplier ~ m_vs_k$k)
 # Call:
 #   rlm(formula = m_vs_k$multiplier ~ m_vs_k$k)
 # Converged in 7 iterations
@@ -1476,6 +1475,15 @@ ggsave(filename = "output/plots/cap_2030_b/multiplier_rfb_k_rlm.png",
 # 
 # Degrees of freedom: 40 total; 38 residual
 # Scale estimate: 0.0755
+#
+# Residuals:
+#   Min        1Q    Median        3Q       Max 
+# -0.205060 -0.047844 -0.002702  0.052150  0.630248 
+# 
+# Coefficients:
+#   Value   Std. Error t value
+# (Intercept)  1.0474  0.0482    21.7240
+# m_vs_k$k    -0.6469  0.2631    -2.4592
 
 ### steps
 p_m_vs_k +
@@ -1498,3 +1506,86 @@ ggsave(filename = "output/plots/cap_2030_b/multiplier_rfb_k_step_rlm.png",
 ggsave(filename = "output/plots/cap_2030_b/multiplier_rfb_k_step_rlm.pdf",
        width = 10, height = 6, units = "cm")
 
+
+
+### check 10%
+m_vs_k_10 <- res_cap %>%
+  filter(stat_yrs == "all" & rule == "rfb") %>%
+  group_by(fhist, stock) %>%
+  filter(risk_Blim <= 0.10) %>%
+  filter(multiplier == max(multiplier)) %>%
+  filter(stock %in% stocks$stock[1:20])
+m_vs_k_10 %>%
+  ggplot(aes(x = k, y = multiplier)) +
+  geom_line(aes(group = stock), colour = "grey", size = 0.3) +
+  geom_point(aes(colour = fhist), size = 0.4) +
+  scale_color_brewer("fishing\nhistory", palette = "Set1") +
+  labs(x = expression(italic(k)~"[year"^{-1}*"]"), 
+       y = expression("multiplier ("*italic(m)*")")) +
+  ylim(c(0, NA)) + xlim(c(0, NA)) +
+  theme_bw(base_size = 8) +
+  theme(legend.key.height = unit(0.6, "lines"),
+        legend.key.width = unit(0.5, "lines")) +
+  geom_smooth(method = MASS::rlm, size = 0.3, se = FALSE)
+
+
+
+### combine risk and multiplier plots
+p_risk <- res_plot %>% 
+  filter(multiplier >= 0.7 & multiplier <= 1.05) %>%
+  filter(stat == "B[lim]~risk") %>%
+  ggplot(aes(x = multiplier, y = value,
+             colour = group, 
+             alpha = group,
+             group = interaction(stock, fhist))) +
+  geom_line(size = 0.1) +
+  geom_line(data = res_plot %>% 
+              filter(multiplier >= 0.7 & multiplier <= 1.05) %>%
+              filter(stat == "B[lim]~risk" & group == "median"),
+            aes(x = multiplier, y = value), colour = "black", size = 0.4, 
+            show.legend = FALSE) + 
+  geom_hline(data = data.frame(stat = "B[lim]~risk", y = 0.05),
+             aes(yintercept = y), colour = "black", linetype = "2121") +
+  facet_grid(stat ~ group_k, labeller = "label_parsed", switch = "y",
+             scales = "free_y") +
+  scale_colour_manual("", values = c("median" = "black", "one-way" = "#E41A1C",
+                                     "random" = "#377EB8")) +
+  scale_alpha_manual("", values = c("median" = 1, "one-way" = 1,
+                                    "random" = 1)) +
+  theme_bw(base_size = 8) +
+  theme(strip.placement.y = "outside",
+        strip.background.y = element_blank(),
+        strip.text.y = element_text(size = 8),
+        strip.text.x = element_text(size = 6),
+        legend.position = c(0.7, 0.85),
+        legend.key.height = unit(0.5, "lines"),
+        legend.key.width = unit(0.6, "lines"),
+        legend.key = element_blank(),
+        legend.background = element_blank()) +
+  labs(x = "multiplier", y = "") +
+  ylim(c(0, NA))
+p_mult <- m_vs_k %>%
+  ggplot(aes(x = k, y = multiplier)) +
+  geom_line(aes(group = stock), colour = "grey", size = 0.3) +
+  geom_point(aes(colour = fhist, shape = fhist), size = 0.7) +
+  scale_color_brewer("fishing\nhistory", palette = "Set1") +
+  scale_shape("fishing\nhistory") +
+  labs(x = expression(italic(k)~"[year"^{-1}*"]"), 
+       y = expression("multiplier")) +
+  ylim(c(0, NA)) + xlim(c(0, NA)) +
+  theme_bw(base_size = 8) +
+  theme(legend.key.height = unit(0.6, "lines"),
+        legend.key.width = unit(0.5, "lines"),
+        legend.position = c(0.8, 0.85),
+        legend.key = element_blank(),
+        legend.background = element_blank()) +
+  geom_line(data = data.frame(k = c(0.08, 0.195), multiplier = c(0.95, 0.95)),
+            colour = "black") +
+  geom_line(data = data.frame(k = c(0.2, 0.32), multiplier = c(0.9, 0.9)),
+            colour = "black")
+plot_grid(p_risk, p_mult, labels = c("(a)", "(b)"), label_size = 9,
+          nrow = 1, rel_widths = c(1.5, 1), align = "v", axis = "b")
+ggsave(filename = "output/plots/cap_2030_b/multiplier_justification.pdf",
+       width = 17, height = 6, units = "cm")
+ggsave(filename = "output/plots/cap_2030_b/multiplier_justification.png", 
+       type = "cairo", width = 17, height = 6, units = "cm", dpi = 600)
