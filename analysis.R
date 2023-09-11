@@ -1700,7 +1700,7 @@ res_plot <- res_plot %>%
   mutate(interval = factor(interval, levels = c(1, 2),
                            labels = c("annual", "biennial")))
 
-res_plot %>% 
+p <- res_plot %>% 
   ggplot(aes(x = multiplier, y = value,
              colour = group, 
              linetype = interval,
@@ -1709,11 +1709,11 @@ res_plot %>%
              )) +
   geom_line(size = 0.3) +
   geom_hline(data = data.frame(stat = "B[lim]~risk", y = 0.05),
-             aes(yintercept = y), colour = "red") +
+             aes(yintercept = y), colour = "black", linetype = "dashed") +
   facet_grid(stat ~ group_k, labeller = "label_parsed", switch = "y",
              scales = "free_y") +
-  scale_colour_manual("", values = c("median" = "black", "one-way" = "blue",
-                                     "random" = "green")) +
+  scale_colour_manual("", values = c("median" = "black", "one-way" = "#E41A1C",
+                                     "random" = "#377EB8")) +
   scale_alpha_manual("", values = c("median" = 1, "one-way" = 0.2,
                                     "random" = 0.2)) +
   scale_linetype_manual("interval", values = c("annual" = "dotted",
@@ -1726,12 +1726,15 @@ res_plot %>%
   labs(x = "multiplier", y = "") +
   ylim(c(0, NA)) +
   scale_x_continuous(breaks = c(0, 0.5, 1, 1.5, 2))
-ggsave(filename = "output/plots/cap_2030_b/interval_multiplier_rfb_fixed.pdf",
+p
+ggsave(plot = p,
+       filename = "output/plots/cap_2030_b/interval_multiplier_rfb_fixed.pdf",
        width = 17, height = 10, units = "cm")
-ggsave(filename = "output/plots/cap_2030_b/interval_multiplier_rfb_fixed.png",
+ggsave(plot = p,
+       filename = "output/plots/cap_2030_b/interval_multiplier_rfb_fixed.png",
        type = "cairo", width = 17, height = 10, units = "cm", dpi = 600)
 ### zoom
-res_plot %>% 
+p_risk <- res_plot %>% 
   filter(multiplier >= 0.7 & multiplier <= 1.05) %>%
   filter(stat %in% c("Catch/MSY", "B[lim]~risk")) %>%
   ggplot(aes(x = multiplier, y = value,
@@ -1742,11 +1745,11 @@ res_plot %>%
   )) +
   geom_line(size = 0.3) +
   geom_hline(data = data.frame(stat = "B[lim]~risk", y = 0.05),
-             aes(yintercept = y), colour = "red") +
+             aes(yintercept = y), colour = "black", linetype = "dashed") +
   facet_grid(stat ~ group_k, labeller = "label_parsed", switch = "y",
              scales = "free_y") +
-  scale_colour_manual("", values = c("median" = "black", "one-way" = "blue",
-                                     "random" = "green")) +
+  scale_colour_manual("", values = c("median" = "black", "one-way" = "#E41A1C",
+                                     "random" = "#377EB8")) +
   scale_alpha_manual("", values = c("median" = 1, "one-way" = 0.2,
                                     "random" = 0.2)) +
   scale_linetype_manual("interval", values = c("annual" = "dotted",
@@ -1758,10 +1761,133 @@ res_plot %>%
         strip.text.x = element_text(size = 6)) +
   labs(x = "multiplier", y = "") +
   ylim(c(0, NA))
-ggsave(filename = "output/plots/cap_2030_b/interval_multiplier_rfb_zoom_fixed.pdf",
+p_risk
+ggsave(plot = p_risk,
+       filename = paste0("output/plots/cap_2030_b/",
+                         "interval_multiplier_rfb_zoom_fixed.pdf"),
        width = 17, height = 10, units = "cm")
-ggsave(filename = "output/plots/cap_2030_b/interval_multiplier_rfb_zoom_fixed.png", 
+ggsave(plot = p_risk,
+       filename = paste0("output/plots/cap_2030_b/",
+                         "interval_multiplier_rfb_zoom_fixed.png"), 
        type = "cairo", width = 17, height = 10, units = "cm", dpi = 600)
+### same but without curves for annual advice
+p_risk_biennial <- res_plot %>% 
+  filter(multiplier >= 0.7 & multiplier <= 1.05) %>%
+  filter(stat %in% c("Catch/MSY", "B[lim]~risk")) %>%
+  #filter(interval == "biennial") %>%
+  ggplot(aes(x = multiplier, y = value,
+             colour = group, 
+             linetype = interval,
+             group = interaction(stock, interval, group),
+             alpha = group
+  )) +
+  geom_line(size = 0.3) +
+  geom_hline(data = data.frame(stat = "B[lim]~risk", y = 0.05),
+             aes(yintercept = y), colour = "black", linetype = "dashed") +
+  facet_grid(stat ~ group_k, labeller = "label_parsed", switch = "y",
+             scales = "free_y") +
+  scale_colour_manual("", values = c("median" = "black", "one-way" = "#E41A1C",
+                                     "random" = "#377EB8")) +
+  scale_alpha_manual("", values = c("median" = 1, "one-way" = 0.2,
+                                    "random" = 0.2)) +
+  scale_linetype_manual("interval", values = c("annual" = "blank",
+                                               "biennial" = "solid")) +
+  theme_bw(base_size = 8) +
+  theme(strip.placement.y = "outside",
+        strip.background.y = element_blank(),
+        strip.text.y = element_text(size = 8),
+        strip.text.x = element_text(size = 6)) +
+  labs(x = "multiplier", y = "") +
+  ylim(c(0, NA))
+p_risk_biennial
+ggsave(plot = p_risk_biennial,
+       filename = paste0("output/plots/cap_2030_b/",
+                         "interval_multiplier_rfb_zoom_fixed_biennial.png"), 
+       type = "cairo", width = 17, height = 10, units = "cm", dpi = 600)
+### m vs k
+m_vs_k <- res_cap_int %>%
+  filter(stat_yrs == "all" & rule == "rfb") %>%
+  group_by(fhist, stock, interval) %>%
+  filter(risk_Blim <= 0.05) %>%
+  filter(multiplier == max(multiplier)) %>%
+  filter(stock %in% stocks$stock[1:20]) %>%
+  mutate(TAC_interval = switch(interval, "1" = "annual", "2" = "biennial", NA)) %>%
+  mutate(group = paste0(TAC_interval, " - ", fhist)) %>%
+  mutate(group = factor(group, 
+                        levels = c("annual - one-way", "annual - random",
+                                   "biennial - one-way", "biennial - random")))
+p_mult <- m_vs_k %>%
+  ggplot(aes(x = k, y = multiplier, colour = group, shape = group)) +
+  geom_line(aes(group = stock), colour = "grey", size = 0.3) +
+  geom_point(size = 0.5) +
+  scale_colour_manual("",
+                      values = c("annual - one-way" = "#E41A1C", 
+                                 "annual - random" = "#377EB8",
+                                 "biennial - one-way" = "#E41A1C", 
+                                 "biennial - random" = "#377EB8")) +
+  scale_shape_manual("", 
+                     values = c("annual - one-way" = 16, 
+                                "annual - random" = 17,
+                                "biennial - one-way" = 1, 
+                                "biennial - random" = 2)) +
+  labs(x = expression(italic(k)~"[year"^{-1}*"]"), 
+       y = expression("multiplier")) +
+  ylim(c(0, 1.7)) + xlim(c(0, NA)) +
+  theme_bw(base_size = 8) +
+  theme(legend.key.height = unit(0.6, "lines"),
+        legend.key.width = unit(0.5, "lines"),
+        legend.position = c(0.8, 0.85),
+        legend.key = element_blank(),
+        legend.background = element_blank()) +
+  geom_line(data = data.frame(k = c(0.08, 0.195), multiplier = c(0.95, 0.95),
+                              group = NA),
+            colour = "black") +
+  geom_line(data = data.frame(k = c(0.2, 0.32), multiplier = c(0.9, 0.9),
+                              group = NA),
+            colour = "black")
+p_mult
+### same without annual values
+p_mult_biennial <- m_vs_k %>%
+  filter(TAC_interval == "biennial") %>%
+  ggplot(aes(x = k, y = multiplier, colour = group, shape = group)) +
+  geom_line(aes(group = stock), colour = "grey", size = 0.3) +
+  geom_point(size = 0.5) +
+  scale_colour_manual("",
+                      values = c("annual - one-way" = "#E41A1C", 
+                                 "annual - random" = "#377EB8",
+                                 "biennial - one-way" = "#E41A1C", 
+                                 "biennial - random" = "#377EB8")) +
+  scale_shape_manual("", 
+                     values = c("annual - one-way" = 16, 
+                                "annual - random" = 17,
+                                "biennial - one-way" = 1, 
+                                "biennial - random" = 2)) +
+  labs(x = expression(italic(k)~"[year"^{-1}*"]"), 
+       y = expression("multiplier")) +
+  ylim(c(0, 1.7)) + xlim(c(0, NA)) +
+  theme_bw(base_size = 8) +
+  theme(legend.key.height = unit(0.6, "lines"),
+        legend.key.width = unit(0.5, "lines"),
+        legend.position = c(0.8, 0.85),
+        legend.key = element_blank(),
+        legend.background = element_blank()) +
+  geom_line(data = data.frame(k = c(0.08, 0.195), multiplier = c(0.95, 0.95),
+                              group = NA),
+            colour = "black") +
+  geom_line(data = data.frame(k = c(0.2, 0.32), multiplier = c(0.9, 0.9),
+                              group = NA),
+            colour = "black")
+p_mult_biennial
+plot_grid(p_risk_biennial, p_mult_biennial, 
+          nrow = 1, rel_widths = c(1, 0.6), align = "v", axis = "b")
+ggsave(filename = paste0("output/plots/cap_2030_b/",
+                         "interval_multiplier_rfb_zoom_fixed_biennial_two.png"), 
+       type = "cairo", width = 17, height = 8, units = "cm", dpi = 600)
+plot_grid(p_risk, p_mult, 
+          nrow = 1, rel_widths = c(1, 0.6), align = "v", axis = "b")
+ggsave(filename = paste0("output/plots/cap_2030_b/",
+                         "interval_multiplier_rfb_zoom_fixed_two.png"), 
+       type = "cairo", width = 17, height = 8, units = "cm", dpi = 600)
 
 ### rb rule - interval ####
 ### medians
@@ -1798,7 +1924,7 @@ res_plot <- res_plot %>%
   mutate(interval = factor(interval, levels = c(1, 2),
                            labels = c("annual", "biennial")))
 
-res_plot %>% 
+p <- res_plot %>% 
   ggplot(aes(x = multiplier, y = value,
              colour = group, 
              linetype = interval,
@@ -1807,11 +1933,11 @@ res_plot %>%
   )) +
   geom_line(size = 0.3) +
   geom_hline(data = data.frame(stat = "B[lim]~risk", y = 0.05),
-             aes(yintercept = y), colour = "red") +
+             aes(yintercept = y), linetype = "dashed", colour = "black") +
   facet_grid(stat ~ "all", labeller = "label_parsed", switch = "y",
              scales = "free_y") +
-  scale_colour_manual("", values = c("median" = "black", "one-way" = "blue",
-                                     "random" = "green")) +
+  scale_colour_manual("", values = c("median" = "black", "one-way" = "#E41A1C",
+                                     "random" = "#377EB8")) +
   scale_alpha_manual("", values = c("median" = 1, "one-way" = 0.2,
                                     "random" = 0.2)) +
   scale_linetype_manual("interval", values = c("annual" = "dotted",
@@ -1824,12 +1950,13 @@ res_plot %>%
   labs(x = "multiplier", y = "") +
   ylim(c(0, NA)) +
   scale_x_continuous(breaks = c(0, 0.5, 1, 1.5, 2))
+p
 ggsave(filename = "output/plots/cap_2030_b/interval_multiplier_rb_fixed.pdf",
        width = 17, height = 10, units = "cm")
 ggsave(filename = "output/plots/cap_2030_b/interval_multiplier_rb_fixed.png",
        type = "cairo", width = 17, height = 10, units = "cm", dpi = 600)
 ### zoom
-res_plot %>% 
+p_risk <- res_plot %>% 
   filter(multiplier <= 1.05) %>%
   filter(stat %in% c("Catch/MSY", "B[lim]~risk")) %>%
   ggplot(aes(x = multiplier, y = value,
@@ -1840,13 +1967,13 @@ res_plot %>%
   )) +
   geom_line(size = 0.3) +
   geom_hline(data = data.frame(stat = "B[lim]~risk", y = 0.05),
-             aes(yintercept = y), colour = "red") +
-  facet_grid(stat ~ "all", labeller = "label_parsed", switch = "y",
+             aes(yintercept = y), colour = "black", linetype = "dashed") +
+  facet_grid(stat ~ "all~stocks", labeller = "label_parsed", switch = "y",
              scales = "free_y") +
-  scale_colour_manual("", values = c("median" = "black", "one-way" = "blue",
-                                     "random" = "green")) +
-  scale_alpha_manual("", values = c("median" = 1, "one-way" = 0.1,
-                                    "random" = 0.1)) +
+  scale_colour_manual("", values = c("median" = "black", "one-way" = "#E41A1C",
+                                     "random" = "#377EB8")) +
+  scale_alpha_manual("", values = c("median" = 1, "one-way" = 0.2,
+                                    "random" = 0.2)) +
   scale_linetype_manual("interval", values = c("annual" = "dotted",
                                                "biennial" = "solid")) +
   theme_bw(base_size = 8) +
@@ -1856,8 +1983,121 @@ res_plot %>%
         strip.text.x = element_text(size = 6)) +
   labs(x = "multiplier", y = "") +
   ylim(c(0, NA))
+p_risk
 ggsave(filename = "output/plots/cap_2030_b/interval_multiplier_rb_zoom_fixed.pdf",
        width = 17, height = 10, units = "cm")
 ggsave(filename = "output/plots/cap_2030_b/interval_multiplier_rb_zoom_fixed.png", 
        type = "cairo", width = 17, height = 10, units = "cm", dpi = 600)
+### same but without curves for annual advice
+p_risk_biennial <- res_plot %>% 
+  filter(multiplier >= 0.0 & multiplier <= 1.05) %>%
+  filter(stat %in% c("Catch/MSY", "B[lim]~risk")) %>%
+  #filter(interval == "biennial") %>%
+  ggplot(aes(x = multiplier, y = value,
+             colour = group, 
+             linetype = interval,
+             group = interaction(stock, interval, group),
+             alpha = group
+  )) +
+  geom_line(size = 0.3) +
+  geom_hline(data = data.frame(stat = "B[lim]~risk", y = 0.05),
+             aes(yintercept = y), colour = "black", linetype = "dashed") +
+  facet_grid(stat ~ "all~stocks", labeller = "label_parsed", switch = "y",
+             scales = "free_y") +
+  scale_colour_manual("", values = c("median" = "black", "one-way" = "#E41A1C",
+                                     "random" = "#377EB8")) +
+  scale_alpha_manual("", values = c("median" = 1, "one-way" = 0.2,
+                                    "random" = 0.2)) +
+  scale_linetype_manual("interval", values = c("annual" = "blank",
+                                               "biennial" = "solid")) +
+  theme_bw(base_size = 8) +
+  theme(strip.placement.y = "outside",
+        strip.background.y = element_blank(),
+        strip.text.y = element_text(size = 8),
+        strip.text.x = element_text(size = 6)) +
+  labs(x = "multiplier", y = "") +
+  ylim(c(0, NA))
+p_risk_biennial
+ggsave(plot = p_risk_biennial,
+       filename = paste0("output/plots/cap_2030_b/",
+                         "interval_multiplier_rb_zoom_fixed_biennial.png"), 
+       type = "cairo", width = 17, height = 10, units = "cm", dpi = 600)
+### m vs k
+m_vs_k <- res_cap_int %>%
+  filter(stat_yrs == "all" & rule == "rb") %>%
+  group_by(fhist, stock, interval) %>%
+  filter(risk_Blim <= 0.05) %>%
+  filter(multiplier == max(multiplier)) %>%
+  #filter(stock %in% stocks$stock[1:20]) %>%
+  mutate(TAC_interval = switch(interval, "1" = "annual", "2" = "biennial", NA)) %>%
+  mutate(group = paste0(TAC_interval, " - ", fhist)) %>%
+  mutate(group = factor(group, 
+                        levels = c("annual - one-way", "annual - random",
+                                   "biennial - one-way", "biennial - random")))
+p_mult <- m_vs_k %>%
+  ggplot(aes(x = k, y = multiplier, colour = group, shape = group)) +
+  geom_line(aes(group = stock), colour = "grey", size = 0.3) +
+  geom_point(size = 0.5) +
+  scale_colour_manual("",
+                      values = c("annual - one-way" = "#E41A1C", 
+                                 "annual - random" = "#377EB8",
+                                 "biennial - one-way" = "#E41A1C", 
+                                 "biennial - random" = "#377EB8")) +
+  scale_shape_manual("", 
+                     values = c("annual - one-way" = 16, 
+                                "annual - random" = 17,
+                                "biennial - one-way" = 1, 
+                                "biennial - random" = 2)) +
+  labs(x = expression(italic(k)~"[year"^{-1}*"]"), 
+       y = expression("multiplier")) +
+  ylim(c(0, 1.7)) + xlim(c(0, NA)) +
+  theme_bw(base_size = 8) +
+  theme(legend.key.height = unit(0.6, "lines"),
+        legend.key.width = unit(0.5, "lines"),
+        legend.position = c(0.8, 0.85),
+        legend.key = element_blank(),
+        legend.background = element_blank()) +
+  geom_line(data = data.frame(k = c(0.08, 1), multiplier = c(0.5, 0.5),
+                              group = NA),
+            colour = "black")
+p_mult
+### same without annual values
+p_mult_biennial <- m_vs_k %>%
+  filter(TAC_interval == "biennial") %>%
+  ggplot(aes(x = k, y = multiplier, colour = group, shape = group)) +
+  geom_line(aes(group = stock), colour = "grey", size = 0.3) +
+  geom_point(size = 0.5) +
+  scale_colour_manual("",
+                      values = c("annual - one-way" = "#E41A1C", 
+                                 "annual - random" = "#377EB8",
+                                 "biennial - one-way" = "#E41A1C", 
+                                 "biennial - random" = "#377EB8")) +
+  scale_shape_manual("", 
+                     values = c("annual - one-way" = 16, 
+                                "annual - random" = 17,
+                                "biennial - one-way" = 1, 
+                                "biennial - random" = 2)) +
+  labs(x = expression(italic(k)~"[year"^{-1}*"]"), 
+       y = expression("multiplier")) +
+  ylim(c(0, 1.7)) + xlim(c(0, NA)) +
+  theme_bw(base_size = 8) +
+  theme(legend.key.height = unit(0.6, "lines"),
+        legend.key.width = unit(0.5, "lines"),
+        legend.position = c(0.8, 0.85),
+        legend.key = element_blank(),
+        legend.background = element_blank()) +
+  geom_line(data = data.frame(k = c(0.08, 1), multiplier = c(0.5, 0.5),
+                              group = NA),
+            colour = "black")
+p_mult_biennial
 
+plot_grid(p_risk_biennial, p_mult_biennial, 
+          nrow = 1, rel_widths = c(1, 0.6), align = "v", axis = "b")
+ggsave(filename = paste0("output/plots/cap_2030_b/",
+                         "interval_multiplier_rb_zoom_fixed_biennial_two.png"), 
+       type = "cairo", width = 17, height = 8, units = "cm", dpi = 600)
+plot_grid(p_risk, p_mult, 
+          nrow = 1, rel_widths = c(1, 0.6), align = "v", axis = "b")
+ggsave(filename = paste0("output/plots/cap_2030_b/",
+                         "interval_multiplier_rb_zoom_fixed_two.png"), 
+       type = "cairo", width = 17, height = 8, units = "cm", dpi = 600)
