@@ -82,6 +82,7 @@ est_comps <- function(stk, idx, tracking, genArgs,
                       idxL_lag = 1, idxL_range = 1,
                       pa_buffer = FALSE, pa_size = 0.8, pa_duration = 3,
                       Bmsy = NA,
+                      comp_c_length = FALSE,
                       ...) {
   
   ay <- genArgs$ay
@@ -135,6 +136,28 @@ est_comps <- function(stk, idx, tracking, genArgs,
   if (isTRUE(comp_c)) {
     c_res <- est_c(ay = ay, catch = catch(stk), catch_lag = catch_lag, 
                    catch_range = catch_range)
+    
+    ### alternative reference catch - option to avoid 0 catch
+    ### -> use length data to find reference years
+    ### use only in first year of simulation, then revert to standard approach
+    if (isTRUE(comp_c_length) & identical(ay, 100)) {
+      
+      c_res <- sapply(seq(dim(stk)[6]), function(i) {
+        ind_f <- window(idx$idxL[,,,,, i]/Lref[i], end = 99)
+        yr_ref <- which(ind_f >= 1)
+        ### if always f<1, use highest f
+        if (isFALSE(length(yr_ref) > 0)) {
+          yr_ref <- which.max(ind_f)
+          c_ref_i <- mean(catch(stk)[, yr_ref,,,, i], na.rm = TRUE)/2
+        } else {
+          c_ref_i <- mean(catch(stk)[, yr_ref,,,, i], na.rm = TRUE)
+        }
+        return(c_ref_i)
+      })
+
+      
+    }
+    
   } else {
     c_res <- 1
   }

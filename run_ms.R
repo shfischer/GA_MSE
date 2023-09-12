@@ -32,6 +32,7 @@ if (length(args) > 0) {
   if (!exists("comp_b")) comp_b <- TRUE
   if (!exists("scenario")) scenario <- "uncertainty_cap"
   if (!exists("cap_below_b")) cap_below_b <- TRUE
+  if (!exists("comp_c_length")) comp_c_length <- FALSE
   ### GA search
   if (!exists("ga_search")) ga_search <- TRUE
   if (isTRUE(ga_search)) {
@@ -175,6 +176,10 @@ input <- lapply(input, function(x) {
   if (isFALSE(cap_below_b)) {
     x$ctrl.mp$ctrl.is@args$cap_below_b <- cap_below_b
     #x$ctrl.mp$ctrl.is@method <- is_comps
+  }
+  ### alternative reference catch in first year?
+  if (isTRUE(comp_c_length)) {
+    x$ctrl.mp$ctrl.est@args$comp_c_length <- comp_c_length
   }
   
   return(x)
