@@ -2101,3 +2101,141 @@ plot_grid(p_risk, p_mult,
 ggsave(filename = paste0("output/plots/cap_2030_b/",
                          "interval_multiplier_rb_zoom_fixed_two.png"), 
        type = "cairo", width = 17, height = 8, units = "cm", dpi = 600)
+
+
+### ------------------------------------------------------------------------ ###
+### WKLIFE XII 2023 - alternative reference catch ####
+### ------------------------------------------------------------------------ ###
+### how to get out of zero catch advice
+### set reference catch based on mean catch length in the past
+
+### load results
+res_ref_catch <- foreach(stock = stocks$stock[1:29], .combine = bind_rows) %:%
+  foreach(fhist = c("one-way", "random"), .combine = bind_rows) %:%
+  foreach(rule = c("rfb", "rb"), .combine = bind_rows) %:%
+  foreach(reference_catch = c("default", "length"), .combine = bind_rows) %do% {
+    #browser()
+    ### load data
+    par_file <- "multiplier-upper_constraint1.2-lower_constraint0.7"
+    obj_file <- "obj_ICES_MSYPA"
+    scenario <- switch(reference_catch,
+                       "default" = paste0("cap_20_30_", rule, "_b"),
+                       "length" = paste0("cap_20_30_", rule, "_b_0"))
+    path <- paste0("output/500_100/", scenario, "/", fhist, "/", stock, "/",
+                   par_file, "--", obj_file)
+    path_runs <- paste0(path, "_runs.rds")
+    if (!file.exists(path_runs)) {
+      print("file missing")
+      return(NULL)
+    }
+    #print("found something")
+    ga_runs <- readRDS(path_runs)
+    
+    stats <- lapply(ga_runs, function(x) {
+      tmp <- cbind(as.data.frame(t(x$pars)),
+                   as.data.frame(lapply(as.data.frame(t(x$stats)), unlist)))
+      return(tmp)
+    })
+    stats <- do.call(rbind, stats)
+    stats$stock <- stock
+    stats$fhist <- fhist
+    stats$rule <- rule
+    stats$reference_catch <- reference_catch
+    rownames(stats) <- NULL
+    return(stats)
+}
+### add k
+res_ref_catch <- res_ref_catch %>%
+  left_join(stocks[, c("stock", "k")]) %>%
+  mutate(stock_k = paste0(stock, "~(italic(k)==", k, ")")) %>%
+  mutate(stock_k = factor(stock_k, levels = unique(stock_k))) %>%
+  mutate(stock = factor(stock, levels = stocks$stock))
+
+saveRDS(res_ref_catch, file = "output/500_100/rfb-rb-cap2030_b_ref_catch.rds")
+res_ref_catch <- readRDS("output/500_100/rfb-rb-cap2030_b_ref_catch.rds")
+
+### plot - compare stats
+
+
+res_df_plot <- res_ref_catch %>% 
+  select(multiplier, risk_Blim, SSB_rel, Catch_rel, stock, k, fhist, rule, 
+         reference_catch) %>%
+  mutate(group = case_when(
+    k < 0.2 & multiplier == 0.95 & rule == "rfb" ~ "rfb - low k",
+    k >= 0.2 & k < 0.32 & multiplier == 0.90 & rule == "rfb" ~ "rfb - medium k",
+    multiplier == 0.5 & rule == "rb" ~ "rb - all k")) %>%
+  filter(!is.na(group)) %>%
+  mutate(group = factor(group,
+                        levels = c("rfb - low k", "rfb - medium k", 
+                                   "rb - all k"),
+                        labels = c("rfb~-~low~k", "rfb~-~medium~k", 
+                                   "rb~-~all~k")),
+         fhist = factor(fhist, 
+                           levels = c("one-way", "random")),
+         reference_catch = factor(reference_catch,
+                                  levels = c("default", "length"))) %>%
+  pivot_longer(cols = c(risk_Blim, SSB_rel, Catch_rel),
+               names_to = "stat") %>%
+  mutate(stat = factor(stat, 
+                       levels = c("SSB_rel", "Catch_rel", "risk_Blim"), 
+                       labels = c("SSB/B[MSY]", "Catch/MSY", "B[lim]~risk")))
+  
+head(res_df_plot)
+  
+### plot SSB & Catch & Risk
+res_df_plot %>%
+  ggplot(aes(x = reference_catch, y = value)) +
+  geom_boxplot(outlier.size = 0.5, linewidth = 0.4, size = 0.4) +
+  geom_jitter(aes(colour = fhist), width = 0.1, size = 0.1) +
+  facet_grid(stat ~ group, scales = "free",
+             labeller = "label_parsed", switch = "y",) +
+  geom_hline(data = 
+               data.frame(stat = c("SSB/B[MSY]", "Catch/MSY", "B[lim]~risk"),
+                          value = c(NA, NA, 0.055)),
+             aes(yintercept = value), 
+             colour = "red", linetype = "dashed", size = 0.4) +
+  scale_colour_manual("", values = c("one-way" = "#E41A1C",
+                                     "random" = "#377EB8")) +
+  theme_bw(base_size = 8) +
+  theme(strip.placement.y = "outside",
+        strip.background.y = element_blank(),
+        strip.text.y = element_text(size = 8),
+        strip.text.x = element_text(size = 6),
+        legend.key.height = unit(0.5, "lines"),
+        legend.key.width = unit(0.5, "lines")) +
+  labs(x = "Reference catch", y = "") +
+  ylim(c(0, NA))
+
+ggsave(filename = paste0("output/plots/WKLIFE_XII/",
+                         "reference_catch_standard.png"), 
+       type = "cairo", width = 17, height = 8, units = "cm", dpi = 600)
+
+### plot Risk only
+res_df_plot %>%
+  filter(stat == "B[lim]~risk") %>%
+  ggplot(aes(x = reference_catch, y = value)) +
+  geom_boxplot(outlier.size = 0.5, linewidth = 0.4, size = 0.4) +
+  geom_jitter(aes(colour = fhist), width = 0.1, size = 0.1) +
+  facet_grid(stat ~ group, scales = "free",
+             labeller = "label_parsed", switch = "y",) +
+  geom_hline(data = 
+               data.frame(stat = c("B[lim]~risk"),
+                          value = c(0.055)),
+             aes(yintercept = value), 
+             colour = "red", linetype = "dashed", size = 0.4) +
+  scale_colour_manual("", values = c("one-way" = "#E41A1C",
+                                     "random" = "#377EB8")) +
+  theme_bw(base_size = 8) +
+  theme(strip.placement.y = "outside",
+        strip.background.y = element_blank(),
+        strip.text.y = element_text(size = 8),
+        strip.text.x = element_text(size = 6),
+        legend.key.height = unit(0.5, "lines"),
+        legend.key.width = unit(0.5, "lines")) +
+  labs(x = "Reference catch", y = "") +
+  ylim(c(0, NA))
+
+ggsave(filename = paste0("output/plots/WKLIFE_XII/",
+                         "reference_catch_standard_risk.png"), 
+       type = "cairo", width = 17, height = 8, units = "cm", dpi = 600)
+
